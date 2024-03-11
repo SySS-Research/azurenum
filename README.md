@@ -51,7 +51,7 @@ python3 azurenum.py -ua "My-UA"
 less -r out.txt
 ```
 
-# Known issues
+## Known issues
 
 - "Users with no MFA methods" sometimes gets to 100 % (erroneously)
 - "No MFA Methods" checks for administrative users always return no MFA when running as a low privilige user
