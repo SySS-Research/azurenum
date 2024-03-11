@@ -63,3 +63,11 @@ less -r out.txt
 - JSON output was included as an experimental feature to include machine readable output of findings with an assigned severity. This is however not the main goal of AzurEnum and thus is not mantained as much as the text output. This feature will either get removed or improved later on.
 - Add arguments to set FOCI client to authenticate to and access or refresh token to run with.
 - Enumerate interesting owner relationships
+
+## Credits
+
+Enrique Hernández, SySS GmbH
+
+## License
+
+MIT License
