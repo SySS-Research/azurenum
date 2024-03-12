@@ -667,7 +667,11 @@ def enum_pim_assignments(tenantId, aadGraphToken, users, msGraphToken):
         params={ "$expand": "principal,roleDefinition" },
         token=msGraphToken
     )
-    
+
+    if eligibleAssignments == None or activeAssignments == None:
+        # PIM assignments could not be fetched, return
+        return
+
     results = eligibleAssignments + activeAssignments
     roles = set([result["roleDefinition"]["displayName"] for result in results])
     for role in roles:
