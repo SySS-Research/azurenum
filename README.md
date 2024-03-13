@@ -16,6 +16,8 @@ Enumerate some Entra ID (formerly Azure AD) stuff fast, including:
 - Conditional access policies
 - Credentials in object attributes
 
+You can find a quite detailed blog post about the tool here [https://blog.syss.com/posts/introducing-azurenum/](https://blog.syss.com/posts/introducing-azurenum/).
+
 ## Requisites
 
 - python3
