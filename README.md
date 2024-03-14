@@ -26,6 +26,8 @@ You can find a quite detailed blog post about the tool here [https://blog.syss.c
 
 Not a requisite, but running AzurEnum on Linux is recommended.
 
+The amount of output of the tool will depend on the privileges of your Azure user and the configuration of the target tenant. Although AzurEnum can run as any user, you will get the most out of it when running with global reader privileges or greater reader access.
+
 ## Installation
 
 In case `msal` is not installed already
@@ -57,14 +59,14 @@ less -r out.txt
 
 - "Users with no MFA methods" sometimes gets to 100 % (erroneously)
 - "No MFA Methods" checks for administrative users always return no MFA when running as a low privilige user
-- Unfold group members in administrative roles and PIM assignments
-- Explicitly mark modifiable groups that have Entra ID roles or PIM assignments
 
 ## Future work
 
 - JSON output was included as an experimental feature to include machine readable output of findings with an assigned severity. This is however not the main goal of AzurEnum and thus is not mantained as much as the text output. This feature will either get removed or improved later on.
 - Add arguments to set FOCI client to authenticate to and access or refresh token to run with.
 - Enumerate interesting owner relationships
+- Unfold group members in administrative roles and PIM assignments
+- Explicitly mark modifiable groups that have Entra ID roles or PIM assignments
 
 ## Credits
 
