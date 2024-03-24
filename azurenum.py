@@ -23,6 +23,11 @@ AZURECLI_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
 POWER_AUTOMATE_CLIENT_ID = "386ce8c0-7421-48c9-a1df-2a532400339f" # not foci
 # FOCI clients see https://github.com/dirkjanm/family-of-client-ids-research/blob/main/known-foci-clients.csv
 
+# Could use an enum class for this? maybe refactor in the future
+DEVICE_CODE_FLOW="DEVICE_CODE_FLOW"
+ROPC_FLOW="ROPC_FLOW"
+REFRESH_TOKEN_FLOW="REFRESH_TOKEN_FLOW"
+
 # Default User-Agent Edge on Windows 10
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.2277.112"
 
@@ -131,7 +136,7 @@ def print_header(text):
     print_simple(f"# {text}")
     print_simple("#" * 49 + "\n")
 
-def authenticate_with_msal(client_id):
+def authenticate_with_msal(client_id, scopes, flow, username=None, password=None, refresh_token = None):
     authority = AUTHORITY_URL + "common"
     if args.tenant_id != None:
         authority = AUTHORITY_URL + args.tenant_id
@@ -143,42 +148,27 @@ def authenticate_with_msal(client_id):
         http_client=session
     )
 
-    # Start the device code flow
-    flow = app.initiate_device_flow(scopes=SCOPE_MS_GRAPH)
+    if flow == DEVICE_CODE_FLOW:
+        # Start the device code flow
+        flow = app.initiate_device_flow(scopes=scopes)
 
-    # Print message to the user
-    print_info(flow['message'])
+        # Print message to the user
+        print_info(flow['message'])
 
-    # Acquire token using device code
-    result = app.acquire_token_by_device_flow(flow)
-
-    # Check if the token was successfully acquired
-    if 'access_token' in result:
-        print_info(f"Got access token for Microsoft Graph with client ID {client_id}")
-        return result
+        # Acquire token using device code
+        result = app.acquire_token_by_device_flow(flow)
+    elif flow == ROPC_FLOW and username != None and password != None:
+        result = app.acquire_token_by_username_password(username, password, scopes=SCOPE_MS_GRAPH)
+    elif flow == REFRESH_TOKEN_FLOW and refresh_token != None:
+        result = app.acquire_token_by_refresh_token(scopes=scopes, refresh_token=refresh_token)
     else:
-        print_error(result.get('error'))
-        print_error(result.get('error_description'))
+        print_error("Can not authenticate with the passed arguments")
         return
 
-def authenticate_with_refresh_token(refresh_token, client_id, scope):
-    authority = AUTHORITY_URL + "common"
-    if args.tenant_id != None:
-        authority = AUTHORITY_URL + args.tenant_id
-
-    # Initialize PublicClientApplication
-    app = msal.PublicClientApplication(
-        client_id=client_id,
-        authority=authority,
-        http_client=session
-    )
-
-    # Acquire token using device code
-    result = app.acquire_token_by_refresh_token(scopes=scope, refresh_token=refresh_token)
-
     # Check if the token was successfully acquired
     if 'access_token' in result:
-        return result['access_token']        
+        #print_info(f"Got access token for resource {scopes} with client ID {client_id}")
+        return result
     else:
         print_error(result.get('error'))
         print_error(result.get('error_description'))
@@ -980,7 +970,9 @@ def main():
     parser.add_argument("-j", "--output-json", help="specify filename to save JSON output (only findings related to insecure settings will be written!)", default=None, type=argparse.FileType('w'))
     parser.add_argument("-nc", "--no-color", help="don't use colors", action='store_true')
     parser.add_argument("-ua", "--user-agent", help="specify user agent (default is MS-Edge on Windows 10)", default=None)
-    parser.add_argument("-t", "--tenant-id", help="specify tenant to authenticate to", default=None)
+    parser.add_argument("-t", "--tenant-id", help="specify tenant to authenticate to (needed for ROPC authentication or when authenticating to a non-native tenant of the given user)", default=None)
+    parser.add_argument("-u", "--upn", help="specify user principal name to use in ROPC authentication", default=None)
+    parser.add_argument("-p", "--password", help="specify password to use in ROPC authentication", default=None)
     args = parser.parse_args()
 
     # Set UA if given
@@ -998,8 +990,12 @@ def main():
 
     print_banner()
 
-    # Start authentication process against MS Graph
-    tokens = authenticate_with_msal(OFFICE_CLIENT_ID)
+    # Start authentication process against Azure with SCOPE_GRAPH and OFFICE_CLIENT_ID
+    if args.upn != None and args.password != None and args.tenant_id != None:
+        tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, ROPC_FLOW, args.upn, args.password)
+    else:
+        tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, DEVICE_CODE_FLOW)
+     
     if tokens == None:
         print_error("Could not authenticate to Microsoft Graph. Quitting ...")
         sys.exit(1)
@@ -1014,14 +1010,33 @@ def main():
     
     # Used adquired refresh token to get more tokens of other scopes and FOCI clients
     print_info("Gathering additional access tokens for other FOCI clients and resources ...")
-    msGraphToken = authenticate_with_refresh_token(msGraphRefreshToken, client_id=AZURECLI_CLIENT_ID, scope=SCOPE_MS_GRAPH)
-    aadGraphToken = authenticate_with_refresh_token(msGraphRefreshToken, client_id=AZURECLI_CLIENT_ID, scope=SCOPE_AAD_GRAPH)    
-    armToken = authenticate_with_refresh_token(msGraphRefreshToken, client_id=AZURECLI_CLIENT_ID, scope=SCOPE_ARM)
+    msGraphTokens = authenticate_with_msal(client_id=AZURECLI_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken)
+    if msGraphTokens != None:
+        msGraphToken = msGraphTokens['access_token']
+    else:
+        print_error("Could not request Microsoft Graph token")
+        msGraphRefreshToken = None
+    aadGraphTokens = authenticate_with_msal(client_id=AZURECLI_CLIENT_ID, scopes=SCOPE_AAD_GRAPH, flow=REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken)
+    if aadGraphTokens != None:
+        aadGraphToken = aadGraphTokens['access_token']
+    else:
+        print_error("Could not request AAD Graph token")
+        aadGraphToken = None
+    armTokens = authenticate_with_msal(client_id=AZURECLI_CLIENT_ID, scopes=SCOPE_ARM, flow=REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken)
+    if armTokens != None:
+        armToken = armTokens['access_token']
+    else:
+        print_error("Could not request ARM token")
+        armToken = None
 
     # Perform a 2nd authentication to Microsoft Graph with the client POWER_AUTOMATE_CLIENT_ID
     # Need this to grab the PIM assignments later
-    print_info("In order to grab the PIM assignments later, you need to authenticate a second time")
-    powerAutomateTokens = authenticate_with_msal(POWER_AUTOMATE_CLIENT_ID)
+    if args.upn != None and args.password != None and args.tenant_id != None:
+        powerAutomateTokens = authenticate_with_msal(POWER_AUTOMATE_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=ROPC_FLOW, username=args.upn, password=args.password)
+    else:
+        print_info("In order to grab the PIM assignments later, you need to authenticate a second time")
+        powerAutomateTokens = authenticate_with_msal(POWER_AUTOMATE_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=DEVICE_CODE_FLOW)
+
     if powerAutomateTokens == None:
         print_error("Could not authenticate with client 'Power Automate Desktop For Windows'. PIM Enumeration will not work.")
         powerAutomateAccessToken = None

@@ -51,6 +51,9 @@ python3 azurenum.py -nc
 # Run with custom User-Agent
 python3 azurenum.py -ua "My-UA"
 
+# Run with ROPC authentication (username & password)
+python3 azurenum.py -u myuser@mytenant.com -p mypassword -t xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
 # Read colored txt output (in linux)
 less -r out.txt
 ```
