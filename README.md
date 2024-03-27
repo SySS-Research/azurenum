@@ -58,11 +58,6 @@ python3 azurenum.py -u myuser@mytenant.com -p mypassword -t xxxxxxxx-xxxx-xxxx-x
 less -r out.txt
 ```
 
-## Known issues
-
-- "Users with no MFA methods" sometimes gets to 100 % (erroneously)
-- "No MFA Methods" checks for administrative users always return no MFA when running as a low privilige user
-
 ## Future work
 
 - JSON output was included as an experimental feature to include machine readable output of findings with an assigned severity. This is however not the main goal of AzurEnum and thus is not mantained as much as the text output. This feature will either get removed or improved later on.

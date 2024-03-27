@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import json, sys, argparse, requests, urllib.parse, msal, platform, ctypes
+import json, sys, argparse, requests, msal, platform, ctypes
 from datetime import datetime, timedelta
 
 # Misc Constant GUIDs
@@ -281,7 +281,7 @@ def get_arm(endpoint, params, token, apiVersion = "2018-02-01"):
 
     return result
 
-def basic_info(org, groups, servicePrincipals, groupSettings, users, msGraphToken, msGraphTokenForAzCli, aadGraphToken, armToken):
+def basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistrationDetails, msGraphToken, msGraphTokenForAzCli, armToken):
     
     tenantId = org["id"]
     # Object quota
@@ -399,17 +399,8 @@ def basic_info(org, groups, servicePrincipals, groupSettings, users, msGraphToke
         subscriptions = subscriptionsRaw["value"]
 
     # MFA Methods per User
-    mfaMethodsPerUser = get_aadgraph_value(
-            "/users",
-            {"$select": "displayName,strongAuthenticationDetail"}, 
-            tenantId,
-            aadGraphToken
-        )
-    if mfaMethodsPerUser == None:
-        print_error(f"Could not fetch User MFA Methods")
-
-    if mfaMethodsPerUser != None:
-        usersWithoutMfa = [userMethods for userMethods in mfaMethodsPerUser if len(userMethods["strongAuthenticationDetail"]["methods"]) == 0]
+    if userRegistrationDetails != None:
+        usersWithoutMfa = [userRegistrationDetail for userRegistrationDetail in userRegistrationDetails if not userRegistrationDetail["isMfaCapable"]]
         usersWithoutMfaNum = len(usersWithoutMfa)
         mfaPercent = round(usersWithoutMfaNum / userNum * 100, 2)
 
@@ -437,8 +428,8 @@ def basic_info(org, groups, servicePrincipals, groupSettings, users, msGraphToke
                 print_low(f"Guests with no signin for more than 180 days: {noSignInLarger180}")
             if noSignInLarger365 > 0:
                 print_low(f"Guests with no signin for more than 365 days: {noSignInLarger365}")
-    if mfaMethodsPerUser != None:
-        print_info(f"Users with no MFA methods: {usersWithoutMfaNum}/{userNum} ({mfaPercent} %) - Experimental, may flag 100% of users!")
+    if userRegistrationDetails != None:
+        print_info(f"Users with no MFA methods: {usersWithoutMfaNum}/{userNum} ({mfaPercent} %)")
     if groups != None:
         print_info(f"Groups: {groupNum}")
         print_info(f"Modifiable groups: {modifiableGroupsNum} (Get them with `az ad group list | jq '.[] | select(.visibility == \"Public\").displayName'`)")
@@ -591,7 +582,7 @@ def enum_device_settings(authPolicy, tenantId, aadGraphToken):
         reg_quota = deviceConfiguration[0]["registrationQuota"]
         print_info(f"Maximum number of devices per user: {reg_quota}")
 
-def enum_admin_roles(tenantId, aadGraphToken, msGraphToken):
+def enum_admin_roles(msGraphToken, userRegistrationDetails):
     print_header("Administrative Roles")
 
     directoryRoles = get_msgraph_value("/directoryRoles", {"$expand": "members"}, msGraphToken)
@@ -612,10 +603,10 @@ def enum_admin_roles(tenantId, aadGraphToken, msGraphToken):
                 print_simple(f"- [GROUP] ({displayName}) {synced}")
             elif principal["@odata.type"] == "#microsoft.graph.user":
                 userPrincipalName = principal["userPrincipalName"]
-                userMFAMethodsCount = countUserMFAmethods(tenantId, userPrincipalName, aadGraphToken)
-                lacksMfa = "" if userMFAMethodsCount > 0 else f" {ORANGE}(No MFA Methods!){NC}"
-                if userMFAMethodsCount == -1:
-                    lacksMfa = f" {RED}(error counting MFA){NC}"
+                userHasMfa = hasUserMFA(userPrincipalName, userRegistrationDetails)
+                lacksMfa = "" if userHasMfa else f" {ORANGE}(No MFA Methods!){NC}"
+                if userHasMfa == None:
+                    lacksMfa = " (MFA unknown)"
                 synced = f" {ORANGE}(synced!){NC}" if principal["onPremisesSyncEnabled"] else ""
                 print_simple(f"- [USER] {userPrincipalName} ({displayName}){synced}{lacksMfa}")
             elif principal["@odata.type"] == "#microsoft.graph.servicePrincipal":
@@ -624,38 +615,33 @@ def enum_admin_roles(tenantId, aadGraphToken, msGraphToken):
                 principalType = principal["@odata.type"]
                 print_error(f"Unknown principal type: {principalType}")
 
-def countUserMFAmethods(tenantId, userPrincipalName, aadGraphToken):
-    # Warning!!! Running this as low-priv user will probably show Zero Methods for everyone, whether there are auth methods or not!
-    upnUrlSafe = urllib.parse.quote(userPrincipalName, safe="")
-    userMFAMethods = get_aadgraph(
-        f"/users/{upnUrlSafe}", 
-        {
-            "$select": "strongAuthenticationDetail"
-        },
-        tenantId,
-        aadGraphToken
-    )
+def hasUserMFA(userPrincipalName, userRegistrationDetails):   
+    if userRegistrationDetails == None:
+        # Information on MFA could not be fetched
+        return None # unknown whether MFA methods are set
 
-    if userMFAMethods == None:
-        # This should only happen if the user has been deleted
-        print_error(f"Failed to count MFA Methods for {userPrincipalName}")
-        return -1 # unknown whether MFA methods are set
+    # pick user mfa methods
+    registrationDetail = next((registrationDetail for registrationDetail in userRegistrationDetails if registrationDetail["userPrincipalName"] == userPrincipalName), None)
+    
+    if registrationDetail == None:
+        print_error(f"User not found: {userPrincipalName}")
+        return None
+    
+    return registrationDetail["isMfaCapable"]
 
-    return len(userMFAMethods["strongAuthenticationDetail"]["methods"])
-
-def enum_pim_assignments(tenantId, aadGraphToken, users, msGraphToken):
+def enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetails):
     print_header("PIM Assignments")
 
     eligibleAssignments = get_msgraph_value(
         "/roleManagement/directory/roleEligibilitySchedules",
         params={ "$expand": "principal,roleDefinition" },
-        token=msGraphToken
+        token=powerAutomateAccessToken
     )
 
     activeAssignments = get_msgraph_value(
         "/roleManagement/directory/roleAssignmentSchedules",
         params={ "$expand": "principal,roleDefinition" },
-        token=msGraphToken
+        token=powerAutomateAccessToken
     )
 
     if eligibleAssignments == None or activeAssignments == None:
@@ -682,10 +668,10 @@ def enum_pim_assignments(tenantId, aadGraphToken, users, msGraphToken):
                 principalId = assignment["principal"]["userPrincipalName"] # for users, show UPN instead of ID
                 friendlyType = "USER"
                 # Check whether synced & no MFA methods
-                userMFAMethodsCount = countUserMFAmethods(tenantId, principalId, aadGraphToken) # number of MFA Methods for the user
-                lacksMfa = "" if userMFAMethodsCount > 0 else f" {ORANGE}(No MFA Methods!){NC}"
-                if userMFAMethodsCount == -1:
-                    lacksMfa = f" {RED}(error counting MFA){NC}"
+                userHasMfa = hasUserMFA(principalId, userRegistrationDetails)
+                lacksMfa = "" if userHasMfa else f" {ORANGE}(No MFA Methods!){NC}"
+                if userHasMfa == None:
+                    lacksMfa = " (MFA unknown)"
                 userObject = next((user for user in users if user["userPrincipalName"] == principalId), None)
                 if userObject == None:
                     synced = f" {RED}(user not found!){NC}"
@@ -1046,7 +1032,7 @@ def main():
     print_info(f"Running as {myUpn}")
     print_info(f"Gathering information ............")
 
-    # Gather basic info
+    # Gather some data that gets reused by other functions
     org = get_msgraph_value("/organization", {}, msGraphToken)[0]
     groups = get_msgraph_value("/groups", {}, msGraphToken)
     if groups == None:
@@ -1069,9 +1055,13 @@ def main():
     )    
     if users == None:
         print_error("Could not fetch users")
+
+    userRegistrationDetails =  get_msgraph_value("/reports/authenticationMethods/userRegistrationDetails", {}, msGraphToken)
+    if userRegistrationDetails == None:
+        print_error("Could not fetch user MFA methods, no MFA information will be provided!")
         
     # Basic Tenant Info
-    basic_info(org, groups, servicePrincipals, groupSettings, users, msGraphToken, msGraphToken, aadGraphToken, armToken)
+    basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistrationDetails, msGraphToken, msGraphToken, armToken)
 
     authPolicy = get_msgraph("/policies/authorizationPolicy/authorizationPolicy", {}, msGraphToken, "beta")
     if authPolicy == None:
@@ -1084,10 +1074,10 @@ def main():
     enum_device_settings(authPolicy, tenantId, aadGraphToken)
 
     # Administrators
-    enum_admin_roles(tenantId, aadGraphToken, msGraphToken)
+    enum_admin_roles(msGraphToken, userRegistrationDetails)
 
     # PIM Assignments
-    enum_pim_assignments(tenantId, aadGraphToken, users, powerAutomateAccessToken)
+    enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetails)
 
     # API-Permissions
     if servicePrincipals != None:
