@@ -578,7 +578,7 @@ def enum_device_settings(authPolicy, tenantId, aadGraphToken):
 
     # Registration quota, note that if device join/registration is disabled, this becomes irrelevant
     deviceConfiguration = get_aadgraph_value("/deviceConfiguration", {}, tenantId, aadGraphToken)
-    if deviceConfiguration != None:
+    if deviceConfiguration is not None and len(deviceConfiguration) > 0:
         reg_quota = deviceConfiguration[0]["registrationQuota"]
         print_info(f"Maximum number of devices per user: {reg_quota}")
 
