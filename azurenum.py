@@ -74,6 +74,10 @@ class PatchedSession(requests.Session):
 session = PatchedSession()
 session.headers.update({"User-Agent": DEFAULT_USER_AGENT})
 
+query_session = requests.session()
+query_session.headers = {'User-Agent': DEFAULT_USER_AGENT}
+
+
 def print_info(text):
     line = f"{CYAN}[+]{NC} {text}"
     print(line)
@@ -179,7 +183,7 @@ def get_msgraph(endpoint, params, token, version="v1.0"):
         "Authorization": f"Bearer {token}"
     }
     url = MS_GRAPH_API + "/" + version + endpoint
-    r = requests.get(url, params=params, headers=headers)
+    r = query_session.get(url, params=params, headers=headers)
     result = json.loads(r.text)
     
     # Check request worked
@@ -197,7 +201,7 @@ def get_msgraph_value(endpoint, params, token, version="v1.0"):
     url = MS_GRAPH_API + "/" + version + endpoint
     results = []
     while True:
-        r = requests.get(url, params=params, headers=headers)
+        r = query_session.get(url, params=params, headers=headers)
         rawResult = json.loads(r.text)
         
         # Check request worked
@@ -224,7 +228,7 @@ def get_aadgraph(endpoint, params, tenantId, token, apiVersion = "1.61-internal"
     }
     url = f"{AAD_GRAPH_API}/{tenantId}{endpoint}"
     params["api-version"] = apiVersion
-    r = requests.get(url, params=params, headers=headers)
+    r = query_session.get(url, params=params, headers=headers)
     result = json.loads(r.text)
     
     # Check request worked
@@ -243,7 +247,7 @@ def get_aadgraph_value(endpoint, params, tenantId, token, apiVersion = "1.61-int
     results = []
     params["api-version"] = apiVersion
     while True:
-        r = requests.get(url, params=params, headers=headers)
+        r = query_session.get(url, params=params, headers=headers)
         rawResult = json.loads(r.text)
         
         # Check request worked
@@ -271,7 +275,7 @@ def get_arm(endpoint, params, token, apiVersion = "2018-02-01"):
     }
     url = ARM_API + endpoint
     params["api-version"] = apiVersion
-    r = requests.get(url, params=params, headers=headers)
+    r = query_session.get(url, params=params, headers=headers)
     result = json.loads(r.text)
 
     if "value" not in result:
@@ -959,12 +963,29 @@ def main():
     parser.add_argument("-t", "--tenant-id", help="specify tenant to authenticate to (needed for ROPC authentication or when authenticating to a non-native tenant of the given user)", default=None)
     parser.add_argument("-u", "--upn", help="specify user principal name to use in ROPC authentication", default=None)
     parser.add_argument("-p", "--password", help="specify password to use in ROPC authentication", default=None)
+    parser.add_argument("-pr", "--proxy", help="specify a proxy to use in sending requests", default=None)
     args = parser.parse_args()
 
-    # Set UA if given
-    if args.user_agent != None:
+
+    if args.user_agent or args.proxy:
         global session
-        session.headers.update({"User-Agent": args.user_agent})
+        global query_session
+
+        # Set UA if given
+        if args.user_agent != None:
+            session.headers.update({"User-Agent": args.user_agent})
+            query_session.headers['User-Agent'] = args.user_agent
+
+        if args.proxy != None:
+            if args.proxy.startswith('http://'):
+                session.proxies = {'https': args.proxy, 'http': args.proxy}
+                session.verify = False 
+                query_session.proxies = {'https': args.proxy, 'http': args.proxy}
+                query_session.verify = False
+                requests.packages.urllib3.disable_warnings() 
+            else:
+                raise Exception('Provide proxy address in format "http://ip:port"')
+
 
     # Set Colors
     if args.no_color:
