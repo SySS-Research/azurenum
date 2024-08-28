@@ -690,7 +690,7 @@ def enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetail
             print_simple(f"- [{friendlyType}] {principalId} ({displayName}) {isPermanent}{stateText}{synced}{lacksMfa}")
 
 def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
-    print_header("ServicePrincipal API Permissions")
+    print_header("ServicePrincipal API Permissions (only listing 'Application Permissions')")
     # In principle I am only interested in SPs from an AppReg. I can fetch the AppRegs `az rest --method get --url "{MS_GRAPH_API}/v1.0/myorganization/applications/"` and then lookout their SPs by checking the "appId" field of the SP object
     # Once I got the SP I can ask the appRoleAssignments like this `az rest --method get --url '{MS_GRAPH_API}/v1.0/servicePrincipals/<servicePrincipalId>/appRoleAssignments'` which get me value[] with objects like {resourceId,resourceDisplayName,appRoleId,...}. I need to pick the resourceId and the appRoleId to ask for the API-Permissions in the next request
     # I go {MS_GRAPH_API}/v1.0/servicePrincipals/<resourceId> and ask for the "appRoles" which look like {id,value,displayName}. The id is the "appRoleId" from before, the value is the API-Permission and the displayname a short description
