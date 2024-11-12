@@ -698,7 +698,6 @@ def enum_application_owners(servicePrincipal, tenantId, msGraphToken):
     # get owner of service principal itself first
     objectId = sp["id"]
     owners = get_msgraph_value(f"/servicePrincipals/{objectId}/owners", {}, msGraphToken)
-#    print(f"{owners}")
     if len(owners) > 0:
         print_info(f"   {YELLOW}SP Owners{NC}")
         for owner in owners:
@@ -708,7 +707,6 @@ def enum_application_owners(servicePrincipal, tenantId, msGraphToken):
             except:
                 print_info(f"     Can not retrieve UPN of SP Owner, dumping id instead")
                 ownerUPN = owner["id"]
-            #do i need owner.displayname here?
             print_info(f"     {CYAN}[{ownerUPN}]{NC}")
 
     # afterwards get corresponding appReg and its owners
@@ -718,10 +716,8 @@ def enum_application_owners(servicePrincipal, tenantId, msGraphToken):
         if appReg["appId"] == appId:
             appRegObjectId = appReg["id"]
             owners = get_msgraph_value(f"/applications/{appRegObjectId}/owners", {}, msGraphToken)
-            #print_info("owners")
             if len(owners) > 0:
                 print_info(f"   {YELLOW}AppReg Owners{NC}")
-                #print_info(f"{owners}")
                 for owner in owners:
                     appRegOwnerUPN = "Empty"
                     try:
