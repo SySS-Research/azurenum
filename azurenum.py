@@ -381,7 +381,7 @@ def basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistr
     if groups != None:
         groupNum = len(groups)
         # These are m365 groups that get created in public teams, should be modifiable (add memberships)
-        modifiableGroups = [group for group in groups if group["visibility"] == "Public"]
+        modifiableGroups = [group for group in groups if group["visibility"] == "Public" and group["membershipRule"] is None]
         modifiableGroupsNum = len(modifiableGroups)
     if servicePrincipals != None:
         nativeServicePrincipals = [spn for spn in servicePrincipals if spn["appOwnerOrganizationId"] == tenantId]
@@ -432,7 +432,7 @@ def basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistr
         print_info(f"Users with no MFA methods: {usersWithoutMfaNum}/{userNum} ({mfaPercent} %)")
     if groups != None:
         print_info(f"Groups: {groupNum}")
-        print_info(f"Modifiable groups: {modifiableGroupsNum} (Get them with `az ad group list | jq '.[] | select(.visibility == \"Public\").displayName'`)")
+        print_info(f"Modifiable groups: {modifiableGroupsNum} (Get them with `az ad group list | jq '.[] | select(.visibility == \"Public\") | select(.membershipRule == null).displayName'`)")
     if servicePrincipals != None:
         print_info(f"Service Principals: {servicePrincipalNum} (aka. \"Enterprise applications\")")
         print_info(f"Service Principals with AppRegs in this tenant: {nativeServicePrincipalsNum}") 
