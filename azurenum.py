@@ -689,6 +689,46 @@ def enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetail
             stateText = f"{GREEN}[{assignmentState}]{NC}"
             print_simple(f"- [{friendlyType}] {principalId} ({displayName}) {isPermanent}{stateText}{synced}{lacksMfa}")
 
+
+
+def enum_application_owners(servicePrincipal, tenantId, msGraphToken):
+    sp = servicePrincipal
+    displayName = sp["displayName"]
+    #print_header(f"Listing Owners of Service Principal and AppReg of SP with [{displayName}]")
+    # get owner of service principal itself first
+    objectId = sp["id"]
+    owners = get_msgraph_value(f"/servicePrincipals/{objectId}/owners", {}, msGraphToken)
+    if len(owners) > 0:
+        print_info(f"   {YELLOW}SP Owners{NC}")
+        for owner in owners:
+            ownerUPN = "Empty"
+            try:
+                ownerUPN = owner["userPrincipalName"]
+            except:
+                print_info(f"     Can not retrieve UPN of SP Owner, dumping id instead")
+                ownerUPN = owner["id"]
+            print_info(f"     {CYAN}[{ownerUPN}]{NC}")
+
+    # afterwards get corresponding appReg and its owners
+    appId = sp["appId"]
+    appRegs = get_msgraph_value(f"/applications/", {}, msGraphToken)
+    for appReg in appRegs:
+        if appReg["appId"] == appId:
+            appRegObjectId = appReg["id"]
+            owners = get_msgraph_value(f"/applications/{appRegObjectId}/owners", {}, msGraphToken)
+            if len(owners) > 0:
+                print_info(f"   {YELLOW}AppReg Owners{NC}")
+                for owner in owners:
+                    appRegOwnerUPN = "Empty"
+                    try:
+                        appRegOwnerUPN = owner["userPrincipalName"]
+                    except:
+                        print_info(f"     Can not retrieve UPN of appReg Owner, dumping id instead")
+                        appRegOwnerUPN = owner["id"]
+                    print_info(f"     {CYAN}[{appRegOwnerUPN}]{NC}")
+
+
+
 def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
     print_header("ServicePrincipal API Permissions (only listing 'Application Permissions')")
     # In principle I am only interested in SPs from an AppReg. I can fetch the AppRegs `az rest --method get --url "{MS_GRAPH_API}/v1.0/myorganization/applications/"` and then lookout their SPs by checking the "appId" field of the SP object
@@ -721,6 +761,7 @@ def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
                     else:
                         # could not enumerate permission name, write down ID
                         print_info(f"- {GREEN}[{displayName}]{NC} has {ORANGE}[{appRoleId}]{NC} in {CYAN}[{resourceDisplayName}]{NC}")
+            enum_application_owners(sp, tenantId, msGraphToken)
     if len(externalSps) > 0:
         print_info(f"ServicePrincipals with an AppReg in a foreign, non-Microsoft tenant")
     for sp in externalSps:
@@ -742,6 +783,7 @@ def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
                     else:
                         # could not enumerate permission name, write down ID
                         print_info(f"- {GREEN}[{displayName}]{NC} has {ORANGE}[{appRoleId}]{NC} in {CYAN}[{resourceDisplayName}]{NC}")
+            enum_application_owners(sp, tenantId, msGraphToken)
 
 def enum_administrative_units(msGraphToken):
     print_header("Administrative Units")
