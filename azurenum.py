@@ -20,7 +20,8 @@ SCOPE_ARM = ["https://management.core.windows.net/.default"]
 SCOPE_MSPIM = ["01fc33a7-78ba-4d2f-a4b7-768e336e890e/.default"]
 OFFICE_CLIENT_ID = "d3590ed6-52b3-4102-aeff-aad2292ab01c"
 AZURECLI_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
-POWER_AUTOMATE_CLIENT_ID = "386ce8c0-7421-48c9-a1df-2a532400339f" # not foci
+#POWER_AUTOMATE_CLIENT_ID = "386ce8c0-7421-48c9-a1df-2a532400339f" # not foci
+MANAGED_MEETING_ROOMS_CLIENT_ID = "eb20f3e3-3dce-4d2c-b721-ebb8d4414067"
 # FOCI clients see https://github.com/dirkjanm/family-of-client-ids-research/blob/main/known-foci-clients.csv
 
 # Could use an enum class for this? maybe refactor in the future
@@ -629,19 +630,19 @@ def hasUserMFA(userPrincipalName, userRegistrationDetails):
     
     return registrationDetail["isMfaCapable"]
 
-def enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetails):
+def enum_pim_assignments(users, pimAccessToken, userRegistrationDetails):
     print_header("PIM Assignments")
 
     eligibleAssignments = get_msgraph_value(
         "/roleManagement/directory/roleEligibilitySchedules",
         params={ "$expand": "principal,roleDefinition" },
-        token=powerAutomateAccessToken
+        token=pimAccessToken
     )
 
     activeAssignments = get_msgraph_value(
         "/roleManagement/directory/roleAssignmentSchedules",
         params={ "$expand": "principal,roleDefinition" },
-        token=powerAutomateAccessToken
+        token=pimAccessToken
     )
 
     if eligibleAssignments == None or activeAssignments == None:
@@ -1056,20 +1057,12 @@ def main():
     else:
         print_error("Could not request ARM token")
         armToken = None
-
-    # Perform a 2nd authentication to Microsoft Graph with the client POWER_AUTOMATE_CLIENT_ID
-    # Need this to grab the PIM assignments later
-    if args.upn != None and args.password != None and args.tenant_id != None:
-        powerAutomateTokens = authenticate_with_msal(POWER_AUTOMATE_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=ROPC_FLOW, username=args.upn, password=args.password)
+    pimTokens = authenticate_with_msal(client_id=MANAGED_MEETING_ROOMS_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken)
+    if pimTokens != None:
+        pimToken = pimTokens['access_token']
     else:
-        print_info("In order to grab the PIM assignments later, you need to authenticate a second time")
-        powerAutomateTokens = authenticate_with_msal(POWER_AUTOMATE_CLIENT_ID, scopes=SCOPE_MS_GRAPH, flow=DEVICE_CODE_FLOW)
-
-    if powerAutomateTokens == None:
-        print_error("Could not authenticate with client 'Power Automate Desktop For Windows'. PIM Enumeration will not work.")
-        powerAutomateAccessToken = None
-    else:
-        powerAutomateAccessToken = powerAutomateTokens['access_token']
+        print_error("Could not request PIM token")
+        pimToken = None
 
     print_info(f"Running as {myUpn}")
     print_info(f"Gathering information ............")
@@ -1119,7 +1112,7 @@ def main():
     enum_admin_roles(msGraphToken, userRegistrationDetails)
 
     # PIM Assignments
-    enum_pim_assignments(users, powerAutomateAccessToken, userRegistrationDetails)
+    enum_pim_assignments(users, pimToken, userRegistrationDetails)
 
     # API-Permissions
     if servicePrincipals != None:
