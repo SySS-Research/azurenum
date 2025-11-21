@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import base64
 import json, sys, argparse, requests, msal, platform, ctypes
 from datetime import datetime, timedelta
 
@@ -963,6 +963,27 @@ def search_principal_properties(groups, servicePrincipals, msGraphToken):
                     print_info(f"[APP] {displayName} => {RED}(notes): {notes}{NC}")
 
 
+def parse_roadtx_token(token):
+    access_token = token['accessToken']
+    tokenparts = access_token.split('.')
+    tokendata = json.loads(base64.urlsafe_b64decode(tokenparts[1]+('='*(len(tokenparts[1])%4))))
+    # light msal token format
+    tokens = {
+        'tokenType': 'Bearer',
+        'tenantId': tokendata.get('tid'),
+        "access_token": access_token,
+        "id_token": token.get('idToken',''),
+        "refresh_token": token.get('refreshToken',''),
+        "expires_on": tokendata.get('exp',''),
+        "id_token_claims": {
+            "upn" : tokendata.get('upn',''),
+            "aud" : tokendata.get('aud',''),
+            "preferred_username": tokendata.get('unique_name','')
+        }
+    }
+    return tokens
+
+
 def print_banner():
     if args.no_color:
         banner = '''
@@ -1002,6 +1023,7 @@ def main():
     parser.add_argument("-t", "--tenant-id", help="specify tenant to authenticate to (needed for ROPC authentication or when authenticating to a non-native tenant of the given user)", default=None)
     parser.add_argument("-u", "--upn", help="specify user principal name to use in ROPC authentication", default=None)
     parser.add_argument("-p", "--password", help="specify password to use in ROPC authentication", default=None)
+    parser.add_argument("-f", "--tokenfile", help="Use a roadtx token authentication file", default=None)
     args = parser.parse_args()
 
     # Set UA if given
@@ -1019,11 +1041,31 @@ def main():
 
     print_banner()
 
-    # Start authentication process against Azure with SCOPE_GRAPH and OFFICE_CLIENT_ID
-    if args.upn != None and args.password != None and args.tenant_id != None:
-        tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, ROPC_FLOW, args.upn, args.password)
-    else:
-        tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, DEVICE_CODE_FLOW)
+    # Roadtx token file management
+    if args.tokenfile != None:
+        with open(args.tokenfile, 'r') as infile:
+            try:
+                token = json.load(infile)
+                if token.get('_clientId', '') != OFFICE_CLIENT_ID:
+                    print(f'Please use office_client_id to ask the ticket : roadtx interactiveauth -c {OFFICE_CLIENT_ID} -r https://graph.windows.net')
+                    return
+                tokens = parse_roadtx_token(token)
+                if tokens['id_token_claims']['aud'] not in ('https://graph.windows.net', 'https://graph.windows.net/',
+                                                            '00000002-0000-0000-c000-000000000000'):
+                    print(
+                        f"Wrong token audience, got {tokens['id_token_claims']['aud']} but expected https://graph.windows.net")
+                    print("Make sure to request you roadtx token with -r https://graph.windows.net")
+                    return
+            except Exception as e:
+                print(f'error in tokenfile : {e}')
+                return
+
+    if tokens is None:
+        # Start authentication process against Azure with SCOPE_GRAPH and OFFICE_CLIENT_ID
+        if args.upn != None and args.password != None and args.tenant_id != None:
+            tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, ROPC_FLOW, args.upn, args.password)
+        else:
+            tokens = authenticate_with_msal(OFFICE_CLIENT_ID, SCOPE_MS_GRAPH, DEVICE_CODE_FLOW)
      
     if tokens == None:
         print_error("Could not authenticate to Microsoft Graph. Quitting ...")

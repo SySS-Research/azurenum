@@ -54,6 +54,11 @@ python3 azurenum.py -ua "My-UA"
 # Run with ROPC authentication (username & password)
 python3 azurenum.py -u myuser@mytenant.com -p mypassword -t xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 
+# Run with .roadtools_auth file to authenticate
+# Useful when device code flow is disabled
+# ask roadtx ticket : roadtx interactiveauth -c d3590ed6-52b3-4102-aeff-aad2292ab01c -r https://graph.windows.ne
+python3 azurenum.py -f .roadtools_auth
+
 # Read colored txt output (in linux)
 less -r out.txt
 ```
