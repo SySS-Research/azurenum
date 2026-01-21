@@ -18,57 +18,67 @@ Enumerate some Entra ID (formerly Azure AD) stuff fast, including:
 
 You can find a quite detailed blog post about the tool here [https://blog.syss.com/posts/introducing-azurenum/](https://blog.syss.com/posts/introducing-azurenum/).
 
-## Requisites
+An update on the changes of the new version (v1.1.5) can be found here [https://blog.syss.com/posts/azurenum-development/](https://blog.syss.com/posts/azurenum-update/).
+
+## Prerequisites
 
 - python3
-- `msal` python library
+- pipx
 - A valid Azure credential set
 
 Not a requisite, but running AzurEnum on Linux is recommended.
 
 The amount of output of the tool will depend on the privileges of your Azure user and the configuration of the target tenant. Although AzurEnum can run as any user, you will get the most out of it when running with global reader privileges or greater reader access.
 
+
 ## Installation
 
-In case `msal` is not installed already
+It's recommended to install AzurEnum with pipx:
 
 ```sh
-pip3 install msal
+git clone https://github.com/SySS-Research/azurenum.git
+cd azurenum
+pipx install .
+
+# OR
+pipx install git+https://github.com/SySS-Research/azurenum.git
 ```
 
 ## Usage
 
 ```sh
 # Get help
-python3 azurenum.py -h
+azurenum -h
+
+# Recommended Usage
+azurenum -u myuser@mytenant.com -p -rd 3 -o out.log -j out.json
 
 # Run with output logging (text & json)
-python3 azurenum.py -o out.txt -j out.json
+azurenum -o out.txt -j out.json
 
 # Run with no colors
-python3 azurenum.py -nc
+azurenum -nc
 
 # Run with custom User-Agent
-python3 azurenum.py -ua "My-UA"
+azurenum -ua "My-UA"
 
 # Run with ROPC authentication (username & password)
-python3 azurenum.py -u myuser@mytenant.com -p mypassword -t xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+azurenum -u myuser@mytenant.com -p mypassword -t xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Enumerate additional policies and IDP (only needs to be specified if NOT using NAA/interactive login (which is default))
+azurenum -pol -idp
+
+# Automate interactive login and query everything
+azurenum -u myuser@mytenant.com -p mypassword 
 
 # Read colored txt output (in linux)
 less -r out.txt
 ```
 
-## Future work
-
-- JSON output was included as an experimental feature to include machine readable output of findings with an assigned severity. This is however not the main goal of AzurEnum and thus is not mantained as much as the text output. This feature will either get removed or improved later on.
-- Add arguments to set FOCI client to authenticate to and access or refresh token to run with.
-- Enumerate interesting owner relationships
-- Unfold group members in administrative roles and PIM assignments
-- Explicitly mark modifiable groups that have Entra ID roles or PIM assignments
-
 ## Credits
 
-Enrique Hernández, SySS GmbH
+Enrique Hernández, SySS GmbH  
+Domenik Jockers, SySS GmbH
 
 ## License
 

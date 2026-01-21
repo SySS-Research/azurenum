@@ -1,0 +1,24 @@
+[project]
+description = "CLI tool to enumerate Entra ID (mis-)configurations"
+readme = "README.md"
+name = "AzurEnum"
+version = "1.1.5"
+requires-python = ">=3.13"
+dependencies = [
+	"msal", 
+	"pyjwt", 
+	"requests", 
+	"alive_progress",
+	"selenium"
+]
+license = "MIT"
+
+[project.packages]
+include = ["azurenum"]
+
+[project.scripts]
+azurenum = "azurenum.azurenum:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

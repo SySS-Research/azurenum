@@ -1,0 +1,5 @@
+msal
+jwt
+requests
+alive_progress
+selenium
