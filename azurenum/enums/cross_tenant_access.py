@@ -5,6 +5,10 @@ def enum_cross_tenant_access(settings, defaultsettings, msGraphToken):
 #    print(settings['value'])
     printer.print_header("Cross Tenant Access Settings")
     printer.print_link("Portal: https://portal.azure.com/#view/Microsoft_AAD_IAM/CompanyRelationshipsMenuBlade/~/CrossTenantAccessSettings")
+
+    if defaultsettings == None:
+        printer.print_error("Could not fetch cross tenant access settings")
+        return
     
     # Default settings
     deftrust= defaultsettings["inboundTrust"]

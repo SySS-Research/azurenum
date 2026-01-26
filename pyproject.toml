@@ -2,7 +2,7 @@
 description = "CLI tool to enumerate Entra ID (mis-)configurations"
 readme = "README.md"
 name = "AzurEnum"
-version = "1.1.5"
+version = "1.1.6"
 requires-python = ">=3.13"
 dependencies = [
 	"msal", 
