@@ -2,8 +2,36 @@ from azurenum.utils import const, printer
 import json
 
 #enum CAPs. should work via aad and msgraph
-def enum_conditional_access(conditionalAccessPolicies):
+def enum_conditional_access(conditionalAccessPolicies, capEnforcement):
     printer.print_header("Conditional Access Policies")
+
+    # CAP enforcement
+    caps_enforced = False
+    if capEnforcement != None:
+        # printer.print_error("Could not retrieve condional access policies!")
+        # return
+        # do checks
+        LEGACY = "00000000-0000-0000-0000-000000000000"
+        ENFORCED = "00000002-0000-0000-c000-000000000000"
+        resourceAppId = None
+
+        printer.print_link(f"Entra: https://aka.ms/BaselineScopesSettingsUX")
+        try:
+            resourceAppId = capEnforcement.get("advancedSettings",{}).get("baselineScopes",{}).get("resourceAppId", None)
+        except:
+            printer.print_error("Could not parse cap enforcement object")
+        if resourceAppId != None:
+            if resourceAppId == ENFORCED:
+                printer.print_info("CAP enforcement is active!\n")
+                caps_enforced = True
+            elif resourceAppId == LEGACY:
+                printer.print_warning("CAP enforcement is disabled!\n")
+                caps_enforced = False
+            else:
+                printer.print_warning("Custom CAP enforcement!\n")
+                caps_enforced = None
+
+    # CAPs
     printer.print_link(f"Portal: {const.AZURE_PORTAL}/?feature.msaljs=false#view/Microsoft_AAD_ConditionalAccess/ConditionalAccessBlade/~/Policies")
     if conditionalAccessPolicies == None:
         printer.print_error("Could not retrieve condional access policies!")
@@ -64,12 +92,27 @@ def enum_conditional_access(conditionalAccessPolicies):
                         else:
                             printer.print_warning("          Policy configures device registration without use of locations")
         except Exception as e:
-            continue
+            # print(e)
+            pass
+
+        # warn if cap targets all resources, excludes some and cap_enforcement is False
+        try:
+            apps = details["Conditions"]["Applications"]  if isAadGraph else [details["conditions"]["applications"]] 
+            includedApps = apps["Include"][0]["Applications"] if isAadGraph else app["includeApplications"] 
+            excludedApps = apps["Exclude"][0]["Applications"] if isAadGraph else app["excludeApplications"]
+            if "All" in includedApps and len(excludedApps) > 0 and caps_enforced == False:
+                printer.print_warning("          Policy targets all resources but excludes some while cap enforcement is disabled - this might be bypassable!")
+            elif "All" in includedApps and len(excludedApps) > 0 and caps_enforced == None:
+                printer.print_warning("          Policy targets all resources but excludes some while cap enforcement is set to custom resources - this might be bypassable!")
+        except Exception as e:
+            # print(e)
+            pass
+
     # check if  a cap has userAction securityRegister is set to trusted locations and print info
     if registerMfaExternally == True:
-        print()
+        printer.print_simple("")
         printer.print_warning(f"{const.RED}Seems like MFA can be registered from anywhere!{const.NC}")
     if registerDeviceCap == False:
-        print()
+        printer.print_simple("")
         printer.print_warning(f"{const.RED}Seems like devices can be registered without MFA (Cross-Check with device settings by using -pol argument)!{const.NC}")
 

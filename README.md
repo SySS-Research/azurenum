@@ -15,10 +15,16 @@ Enumerate some Entra ID (formerly Azure AD) stuff fast, including:
 - Named locations
 - Conditional access policies
 - Credentials in object attributes
+- Conditional access enforcement settings
+
+
 
 You can find a quite detailed blog post about the tool here [https://blog.syss.com/posts/introducing-azurenum/](https://blog.syss.com/posts/introducing-azurenum/).
 
 An update on the changes of the new version (v1.1.5) can be found here [https://blog.syss.com/posts/azurenum-development/](https://blog.syss.com/posts/azurenum-update/).
+
+Further changes are found in the changelog.
+
 
 ## Prerequisites
 
@@ -74,6 +80,14 @@ azurenum -u myuser@mytenant.com -p mypassword
 # Read colored txt output (in linux)
 less -r out.txt
 ```
+
+## Changelog 
+Version v1.1.7 Updates:
+- If groups are used for administrative role assignments, group PIM is now evaluated as well
+- Legacy token handling (AZcli/FOCI)
+- improved error handling
+- CAP enforcement checks
+- now works as guest user with "Global Reader" role
 
 ## Credits
 

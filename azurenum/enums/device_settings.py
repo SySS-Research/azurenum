@@ -25,7 +25,7 @@ def enum_device_settings(authorizationPolicy, devicePolicy=None, conditionalAcce
         try:
             if devicePolicy != None and devicePolicy["id"] == "deviceRegistrationPolicy":
                 userDeviceQuota = devicePolicy["userDeviceQuota"]
-                print()
+                printer.print_simple("")
                 printer.print_info(f"Maximum number of devices per user: {userDeviceQuota}")
                 jsonDeviceSettings["userDeviceQuota"] = userDeviceQuota
 
@@ -128,7 +128,7 @@ def enum_device_settings(authorizationPolicy, devicePolicy=None, conditionalAcce
                         groups = helper.get_directoryObjects_byIds(msGraphToken=msGraphToken, ids=addUserAsLocAdm["groups"])
                         for group in groups:
                             printer.print_simple(f"    - [GROUP] {groups["displayName"]} ({group["id"]})")
-                print()
+                printer.print_simple("")
                 printer.print_info("LAPS for Entra is enabled") if devicePolicy["localAdminPassword"]["isEnabled"] else printer.print_info("LAPS for Entra is disabled")
             else:
                 printer.print_error("Could not retrieve deviceRegistrationPolicy!")
@@ -137,6 +137,6 @@ def enum_device_settings(authorizationPolicy, devicePolicy=None, conditionalAcce
     elif globalargs.policies:
         printer.print_error("Could not fetch device registration policy!")
     else:
-        print()
+        printer.print_simple("")
         printer.print_warning("If you would like to have more information, use --policies flag.")
     output.add_json_output(const.DEVICE_SETTINGS, jsonDeviceSettings)

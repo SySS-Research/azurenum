@@ -217,12 +217,13 @@ def enum_basic_info(org, groups, servicePrincipals, groupSettings, users, userRe
     jsonBasicInfo["securityDefaults"]="unknown"
     if policyAccessToken != None:
         secDefaults = api.get_msgraph("/policies/identitySecurityDefaultsEnforcementPolicy", {}, policyAccessToken)
-        if secDefaults["isEnabled"]:
-            printer.print_warning("Security Defaults are enabled!") 
-            jsonBasicInfo["securityDefaults"]="enabled"
-        else:
-            printer.print_info("Security Defaults are disabled")
-            jsonBasicInfo["securityDefaults"]="disabled"
+        if secDefaults != None:
+            if secDefaults["isEnabled"]:
+                printer.print_warning("Security Defaults are enabled!") 
+                jsonBasicInfo["securityDefaults"]="enabled"
+            else:
+                printer.print_info("Security Defaults are disabled")
+                jsonBasicInfo["securityDefaults"]="disabled"
     else:
         printer.print_info(f"Check if \"Security Defaults\" are enabled: {const.AZURE_PORTAL}/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Properties")
         jsonBasicInfo["securityDefaults"]="unknown"

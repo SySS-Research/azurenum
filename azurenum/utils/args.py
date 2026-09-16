@@ -23,7 +23,14 @@ def parse_args(argv = None):
     auth_group.add_argument("-t", "--tenant-id", help="specify tenant to authenticate to (needed for ROPC authentication or when authenticating to a non-native tenant of the given user)", default=None)
     auth_group.add_argument("-u", "--upn", help="specify user principal name to use in ROPC or interactive authentication", default=None)
     auth_group.add_argument("-p", "--password", help="specify password to use in ROPC or interactive authentication. Leave empty for prompt", nargs='?', const="", default=None)
-    auth_group.add_argument("-rt", "--refresh-token", help="FOCI Refresh Token to authenticate with", default=None)
+    auth_group.add_argument("-frt", "--foci-refresh-token", help="FOCI Refresh Token to authenticate with. Needs to be used together with --azcli-refresh-token", default=None)
+    auth_group.add_argument("-art", "--azcli-refresh-token", help="AZCLI Refresh Token to authenticate with. Needs to be used together with --foci-refresh-token", default=None)
+    # policy_refresh_token
+    auth_group.add_argument("--mwp-refresh-token", help="[Optional] Refresh Token for [Modern Workplace Customer API Native](2e307cd5-5d2d-4499-b656-a97de9f52708). Only needed with -pol and without -naa. If omitted will try to use device code authentication", default=None)
+
+    # idp_refresh_token
+    auth_group.add_argument("--aadps-refresh-token", help="[Optional] Refresh Token for [Azure Active Directory PowerShell](1b730954-1685-4b74-9bfd-dac224a7b894). Only needed with -idp and without -naa. If omitted will try to use device code authentication", default=None)
+
     auth_group.add_argument("-naa", "--nested-app-auth", help="Expects Azure Portal Refresh Token for nested app authentication flow", default=None)
     auth_group.add_argument("-i", "--interactive-auth", help="Use Interactive Authentication flow with Selenium to retrieve a NAA token and use it. This is the default authentication Method", action="store_true")
     auth_group.add_argument("-ua", "--user-agent", help="specify user agent (default is MS-Edge on Windows 10)", default=None)
@@ -31,7 +38,7 @@ def parse_args(argv = None):
 
     # Enumeration Settings Group
     enum_group = parser.add_argument_group('Enumeration settings')
-    enum_group.add_argument("-rd","--recursion-depth",help="Depth for recursion when listing nested principals [Default=1]", default=1, type=int)
+    enum_group.add_argument("-rd","--recursion-depth",help="Depth for recursion when listing nested principals [Default=2]", default=2, type=int)
     enum_group.add_argument("--proxy", help="Use proxy for sending requests. Beware - will disable certificate checks! Example: http://127.0.0.1:8080", default=None)
     enum_group.add_argument("-pol","--policies",help="Query additional policies for tenant like authentication methods and device policies. Always enabled for NAA Auth. For other authentications this will need another login!", action='store_true') # Policy.ReadWrite.All
     enum_group.add_argument("-idp","--identity-provider", help="Query identity providers and federation service-configs for tenant. Always enabled for NAA Auth. For other authentications this will need another login!", action='store_true') # IdentityProvider.ReadWrite.All
@@ -53,7 +60,10 @@ def parse_args(argv = None):
                         tenant_id=_args.tenant_id, 
                         upn=_args.upn, 
                         password=_args.password, 
-                        refresh_token=_args.refresh_token, 
+                        foci_refresh_token=_args.foci_refresh_token, 
+                        azcli_refresh_token=_args.azcli_refresh_token, 
+                        aadps_refresh_token=_args.aadps_refresh_token,
+                        mwp_refresh_token=_args.mwp_refresh_token,
                         nested_app_auth=_args.nested_app_auth, 
                         interactive_auth=_args.interactive_auth, 
                         user_agent=_args.user_agent, 

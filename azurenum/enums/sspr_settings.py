@@ -28,14 +28,14 @@ def enum_sspr_settings(sspr_settings=None, on_premise_integration_settings=None)
     printer.print_info("[Users] are notified about password resets") if sspr_settings["notifyUsersOnPasswordReset"] else printer.print_warning("[Users] are not notified about password resets")
     printer.print_info("[Admins] are notified about password resets") if sspr_settings["notifyOnAdminPasswordReset"] else printer.print_warning("[Admins] are not notified about password resets")
     
-    print()
+    printer.print_simple("")
     # enumerate on premise integration settings
     if on_premise_integration_settings != None:
         if on_premise_integration_settings["objectId"] != None and on_premise_integration_settings["enablementForTenant"]:
             printer.print_info(f"Integrated with on-Premises with id: {on_premise_integration_settings["objectId"]}")
             printer.print_warning("- Password-Writeback is supported!") if on_premise_integration_settings["passwordWritebackSupported"] else printer.print_info("- Passwordwriteback is not supported!")
             printer.print_warning("- Account-Unlock is supported and enabled!") if on_premise_integration_settings["accountUnlockSupported"] and on_premise_integration_settings["accountUnlockEnabled"] else None
-            print()
+            printer.print_simple("")
 
     # list methods
     printer.print_info("Allowed and Enabled SSPR-Methods:")

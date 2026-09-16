@@ -8,8 +8,8 @@ def enum_authentication_methods(authMethods=None, domain=None):
         printer.print_error("Could not fetch authentication methods")
     else:
         for methods in authMethods["authenticationMethodConfigurations"]:
-            method_id = methods["id"]
-            method_status = methods["state"]
+            method_id = methods.get("id", "Error")
+            method_status = methods.get("state", "Unknown State")
             color = const.YELLOW
             if method_status == "enabled":
                 color = const.GREEN

@@ -2,17 +2,28 @@ from azurenum.utils import const, printer, helper, output
 import copy
 
 # enum all pim assignments. depending on --recursion-depth will also query nested groups/owners/appregOwners
-def enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outside_pim=0):
+def enum_pim_assignments(users, pimAssignments, msGraphToken, groupPim=True, assignments_outside_pim=0):
     printer.print_header("PIM Assignments")
 
     if pimAssignments == None:
         # PIM assignments could not be fetched, return
+        printer.print_error("Could not fetch PIM assignments.")
         return
+
+#    if users == None:
+ #       printer.print_error("Could not fetch users to resolve PIM assignments. Skipping...")
+  #      return
 
     if assignments_outside_pim > 0:
         printer.print_warning(f"There seem to be {assignments_outside_pim} role assignments outside of PIM!")
         printer.print_warning("Use --show-directory-roles to additionally show 'Administrative Roles' section")
-        print()
+        printer.print_simple("")
+
+
+    if groupPim == False:
+        printer.print_warning(f"Wont be able to retrieve Group PIM eligible owners and users!")
+        printer.print_warning("If there are assignments on groups, use -naa (or default login) or pass an --aadps-refresh-token!")
+        printer.print_simple("")
 
     roles = set([result["roleDefinition"]["displayName"] for result in pimAssignments])
     for role in roles:
@@ -32,9 +43,10 @@ def enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outsid
             enrichedList = None
             if type == "#microsoft.graph.user":
                 principalId = assignment["principal"]["userPrincipalName"] # for users, show UPN instead of ID 
-                               
-                # Check whether synced & no MFA methods
-                userObject = next((user for user in users if user["userPrincipalName"] == principalId), None)
+                userObject = None
+                if users != None:
+                    # Check whether synced & no MFA methods
+                    userObject = next((user for user in users if user["userPrincipalName"] == principalId), None)
                 if userObject == None:  # edge case if the assigned user was deleted
                     continue
                 # check mfa
@@ -46,7 +58,7 @@ def enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outsid
 
                 #prepare for output
                 enrichedPrincipal = copy.deepcopy(userObject)
-                enrichedPrincipal["AzurEnum-EntraRole"] = assignment
+                enrichedPrincipal["AzurEnum-EntraRole"] = role
                 if userHasMfa:
                     lacksMfa = "" 
                 elif userHasMfa == None:
@@ -67,14 +79,14 @@ def enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outsid
                 synced = f" {const.ORANGE}(synced!){const.NC}" if assignment["principal"]["onPremisesSyncEnabled"] else ""
                 if assignment["principal"]["onPremisesSyncEnabled"]:
                     enrichedPrincipal = copy.deepcopy(assignment["principal"])
-                    enrichedPrincipal["AzurEnum-EntraRole"] = assignment
+                    enrichedPrincipal["AzurEnum-EntraRole"] = role
                     output.add_json_output(f"{const.PIM_ASSIGNMENTS}-{const.SYNCED}", assignment["principal"])
-                enrichedList = helper.gather_nesting([assignment["principal"]], msGraphToken=msGraphToken)
+                enrichedList = helper.gather_nesting([assignment["principal"]], groupPim=groupPim, msGraphToken=msGraphToken)
             elif type == "#microsoft.graph.servicePrincipal":
                 friendlyType = "SERVICE_PRINCIPAL"
-                enrichedList = helper.gather_nesting([assignment["principal"]], msGraphToken=msGraphToken)
+                enrichedList = helper.gather_nesting([assignment["principal"]], groupPim=groupPim, msGraphToken=msGraphToken)
                 jsonData = assignment["principal"]
-                jsonData["AzurEnum-EntraRole"] = assignment              
+                jsonData["AzurEnum-EntraRole"] = role              
                 output.add_json_output(const.PRIVILEGED_APPLICATIONS,jsonData)
             else:
                 friendlyType = "UNKNOWN_TYPE"
@@ -85,4 +97,4 @@ def enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outsid
             stateText = f"{const.GREEN}[{assignmentState}]{const.NC}" if assignmentState == "Active" else f"{const.CYAN}[{assignmentState}]{const.NC}"
             printer.print_simple(f"- [{friendlyType}] {directoryScope} {principalId} ({displayName}) {isPermanent}{stateText}{synced}{lacksMfa}")
             if type == "#microsoft.graph.group" or  type == "#microsoft.graph.servicePrincipal":
-                helper.enum_nested_lists(enrichedList, jsonKey=const.PIM_ASSIGNMENTS)
+                helper.enum_nested_lists(enrichedList, jsonKey=const.PIM_ASSIGNMENTS, permission=role)

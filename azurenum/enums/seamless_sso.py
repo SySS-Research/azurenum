@@ -18,7 +18,7 @@ def enum_seamless_sso(sso_info=None):
         #status 1 -> "We recommend that you roll over Kerberos decryption key(s) for one or more of your on-premises domains. Click here to learn more."
         #status 2 -> ??
         # status 3 -> ??
-        print()
+        printer.print_simple("")
         now = datetime.utcnow()
 
         for domain in sso_info:

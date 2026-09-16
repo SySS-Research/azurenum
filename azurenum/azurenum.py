@@ -98,95 +98,150 @@ def main():
 
     
     # Start authentication process against Azure with SCOPE_GRAPH and const.OFFICE_CLIENT_ID
+    # Getting initial tokens
+    # to fix: one foci and one azcli token.
+    foci_tokens = None
+    azcli_tokens = None
+    # group pim can only be retrieved with broci clients or "myprofile" client (needs interactive logon)
+    group_pim = False
+    # ROPC
     if globalargs.upn != None and globalargs.password != None and globalargs.tenant_id != None:
-        tokens = auth.authenticate_with_msal(const.OFFICE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
-    elif globalargs.refresh_token != None:
-        tokens = auth.authenticate_with_msal(client_id=const.OFFICE_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=globalargs.refresh_token)
+        foci_tokens = auth.authenticate_with_msal(const.OFFICE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
+        azcli_tokens = auth.authenticate_with_msal(const.AZURECLI_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
+    # FOCI Refresh and AZCLI refresh
+    elif globalargs.foci_refresh_token != None and globalargs.azcli_refresh_token != None:
+        foci_tokens = auth.authenticate_with_msal(client_id=const.OFFICE_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=globalargs.foci_refresh_token)
+        azcli_tokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=globalargs.azcli_refresh_token)
+    # NAA Auth RT
     elif globalargs.nested_app_auth != None: # naa RT passed directly
-        tokens = auth.do_broker_authentication(globalargs.nested_app_auth)
-        if tokens != None:
+        foci_tokens = auth.do_broker_authentication(globalargs.nested_app_auth, tenant_id=globalargs.tenant_id)
+        if foci_tokens != None:
+            azcli_tokens = foci_tokens
             globalargs.policies = True
             globalargs.identity_provider = True
+            globalargs.aadps_access_token = foci_tokens["access_token"]
+    # NAA Auth Interactive
     elif globalargs.interactive_auth:
-        tokens = auth.do_interactive_auth(upn=globalargs.upn, password=globalargs.password, tenant_id=globalargs.tenant_id) # getting tokens from portal
-        if tokens != None:
-            globalargs.nested_app_auth = tokens["refresh_token"]
-            tokens = auth.do_broker_authentication(globalargs.nested_app_auth) # getting brokered token -- refreshtoken will remain the same
+        foci_tokens = auth.do_interactive_auth(upn=globalargs.upn, password=globalargs.password, tenant_id=globalargs.tenant_id) # getting naa tokens from portal
+        if foci_tokens != None:
+            globalargs.nested_app_auth = foci_tokens["refresh_token"]
+            foci_tokens = auth.do_broker_authentication(globalargs.nested_app_auth, tenant_id=globalargs.tenant_id) # getting brokered token -- refreshtoken will remain the same
+            azcli_tokens = foci_tokens
             globalargs.policies = True
             globalargs.identity_provider = True
+            globalargs.aadps_access_token = foci_tokens["access_token"]
+    # Device Code Auth
     elif globalargs.device_code:
-        tokens = auth.authenticate_with_msal(const.OFFICE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
+        printer.print_warning("Device Code Authentication will need 2-4 consecutive logins!")
+        foci_tokens = auth.authenticate_with_msal(const.OFFICE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
+        azcli_tokens = auth.authenticate_with_msal(const.AZURECLI_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
     else: # default to interactive NAA
-        tokens = auth.do_interactive_auth(upn=globalargs.upn, password=globalargs.password, tenant_id=globalargs.tenant_id) # getting tokens from portal
-        if tokens != None:
-            globalargs.nested_app_auth = tokens["refresh_token"]
-            tokens = auth.do_broker_authentication(globalargs.nested_app_auth) # getting brokered token -- refreshtoken will remain the same
+        foci_tokens = auth.do_interactive_auth(upn=globalargs.upn, password=globalargs.password, tenant_id=globalargs.tenant_id) # getting naa tokens from portal
+        if foci_tokens != None:
+            globalargs.nested_app_auth = foci_tokens["refresh_token"]
+            foci_tokens = auth.do_broker_authentication(globalargs.nested_app_auth, tenant_id=globalargs.tenant_id) # getting brokered token -- refreshtoken will remain the same
+            azcli_tokens = foci_tokens
             globalargs.policies = True
             globalargs.identity_provider = True
+            globalargs.aadps_access_token = foci_tokens["access_token"]
 
-    if tokens == None:
+    if foci_tokens == None or azcli_tokens == None:
         printer.print_error("Could not authenticate to Microsoft Graph. Quitting ...")
         sys.exit(1)
+    elif foci_tokens != None and azcli_tokens == None:
+        printer.print_error("Could not authenticate with AZCLI to Microsoft Graph. Quitting ...")
+        sys.exit(1)
+    elif foci_tokens == None and azcli_tokens != None:
+        printer.print_error("Could not authenticate with FOCI-client to Microsoft Graph. Quitting ...")
+        sys.exit(1)
+    
+    infoBlocks = 20 if globalargs.nested_app_auth == None else 27 # prepare progress bar
+    # setting azcli to msgraphtoken
+    msGraphRefreshToken = azcli_tokens['refresh_token']
 
-    infoBlocks = 20 if globalargs.nested_app_auth == None else 26 # prepare progress bar
-    msGraphRefreshToken = tokens['refresh_token']
+    # depending on args we need more tokens
     ### Another Login flow for Polcies.ReadWrite.All if using legacy auth
-    policyAccessToken = None if globalargs.nested_app_auth == None else tokens["access_token"]
-    if globalargs.policies and globalargs.nested_app_auth == None: 
-        printer.print_warning("To query Policies we need another log in.....")
+    mwpAccessToken = None if globalargs.nested_app_auth == None else foci_tokens["access_token"]
+    if globalargs.policies and globalargs.nested_app_auth == None and globalargs.mwp_refresh_token == None: 
+        printer.print_warning("No policy token specified, but using -pol. To query Policies we need another log in.....")
         if globalargs.upn != None and globalargs.password != None and globalargs.tenant_id != None and globalargs.nested_app_auth == None:
-            policyTokens = auth.authenticate_with_msal(const.MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
+            mwpTokens = auth.authenticate_with_msal(const.MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
         else:
-            policyTokens = auth.authenticate_with_msal(const.MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
-        infoBlocks += 4
-        policyAccessToken = policyTokens["access_token"]
+            mwpTokens = auth.authenticate_with_msal(const.MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
+        infoBlocks += 5
+        mwpAccessToken = mwpTokens["access_token"]
+    elif globalargs.policies and globalargs.mwp_refresh_token:
+        mwpTokens = auth.authenticate_with_msal(client_id=const.MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=globalargs.mwp_refresh_token)
+        if mwpTokens != None:
+            infoBlocks += 5
+            mwpAccessToken = mwpTokens["access_token"]
+        else: 
+            printer.print_warning("Could not authenticate with client [Modern Workplace Customer API Native](2e307cd5-5d2d-4499-b656-a97de9f52708) to Microsoft Graph to retrieve Policies.")
 
     ### Another Login flow for IdentityProvider.Read.All if using legacy auth
-    idpAccessToken = None if globalargs.nested_app_auth == None else tokens["access_token"]
-    if globalargs.identity_provider and globalargs.nested_app_auth == None: 
-        printer.print_warning("To query IDP settings, we need another log in.....")
+    aadpsAccessToken = None if globalargs.nested_app_auth == None else foci_tokens["access_token"]
+    if globalargs.identity_provider and globalargs.nested_app_auth == None and globalargs.aadps_refresh_token == None: 
+        printer.print_warning("No idp token specified, but using -idp. To query IDP settings, we need another log in.....")
         if globalargs.upn != None and globalargs.password != None and globalargs.tenant_id != None:
-            idpTokens = auth.authenticate_with_msal(const.AAD_POWERSHELL_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
+            aadpsTokens = auth.authenticate_with_msal(const.AAD_POWERSHELL_CLIENT_ID, const.SCOPE_MS_GRAPH, const.ROPC_FLOW, globalargs.upn, globalargs.password)
         else:
-            idpTokens = auth.authenticate_with_msal(const.AAD_POWERSHELL_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
+            aadpsTokens = auth.authenticate_with_msal(const.AAD_POWERSHELL_CLIENT_ID, const.SCOPE_MS_GRAPH, const.DEVICE_CODE_FLOW)
         infoBlocks += 2
-        idpAccessToken = idpTokens["access_token"]
+        aadpsAccessToken = aadpsTokens["access_token"]
+        globalargs.aadps_access_token = aadpsAccessToken
+    elif globalargs.aadps_refresh_token:
+        aadpsTokens = auth.authenticate_with_msal(client_id=const.AAD_POWERSHELL_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=globalargs.aadps_refresh_token)
+        if aadpsTokens != None:
+            if globalargs.identity_provider:
+                infoBlocks += 2
+            aadpsAccessToken = aadpsTokens["access_token"]
+            globalargs.aadps_access_token = aadpsAccessToken # setting to globalargs so it can be reused for group pim in helper.py
+        else: 
+            printer.print_warning("Could not authenticate with client [Azure Active Directory PowerShell](1b730954-1685-4b74-9bfd-dac224a7b894) to Microsoft Graph.")
 
-
-    myUpn = helper.decode_jwt(tokens["access_token"])["upn"]
+    # Fix: Personal Microsoft Account tokens don't carry a upn claim
+    myUpn = helper.decode_jwt(foci_tokens["access_token"]).get("upn", "UPN not found in FOCI access token")
     
+
     # Used acquired refresh token to get more tokens of other scopes and FOCI clients
     printer.print_info("Gathering additional access tokens for other FOCI/NAA clients and resources ...")
-    msGraphTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else tokens
+    # this one is currently not needed since we got azcli tokens already...
+    msGraphTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else azcli_tokens
     if msGraphTokens != None:
         msGraphToken = msGraphTokens['access_token']
     else:
         printer.print_error("Could not request Microsoft Graph token")
         msGraphRefreshToken = None
-    aadGraphTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_AAD_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_AAD_GRAPH)
+    # AZCLI aad graph tokens
+    aadGraphTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_AAD_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_AAD_GRAPH, tenant_id=globalargs.tenant_id)
     if aadGraphTokens != None:
         aadGraphToken = aadGraphTokens['access_token']
     else:
         printer.print_error("Could not request AAD Graph token")
         aadGraphToken = None
-    armTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_ARM, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_ARM)
+    # AZCLI arm Tokens
+    armTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_ARM, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_ARM, tenant_id=globalargs.tenant_id)
     if armTokens != None:
         armToken = armTokens['access_token']
     else:
         printer.print_error("Could not request ARM token")
         armToken = None
-    pimTokens = auth.authenticate_with_msal(client_id=const.MANAGED_MEETING_ROOMS_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(client_id=const.ELMADMIN_CLIENT_ID, refresh_token=globalargs.nested_app_auth, redirect_uri=const.AZURE_PORTAL_BROKER_URI, origin=const.AZURE_PORTAL)
+    # getting tokens via FOCI for PIM
+    pimTokens = auth.authenticate_with_msal(client_id=const.MANAGED_MEETING_ROOMS_CLIENT_ID, scopes=const.SCOPE_MS_GRAPH, flow=const.REFRESH_TOKEN_FLOW, refresh_token=foci_tokens.get("refresh_token")) if globalargs.nested_app_auth == None else auth.do_broker_authentication(client_id=const.ELMADMIN_CLIENT_ID, refresh_token=globalargs.nested_app_auth, redirect_uri=const.AZURE_PORTAL_BROKER_URI, origin=const.AZURE_PORTAL, tenant_id=globalargs.tenant_id)
     if pimTokens != None:
         pimToken = pimTokens['access_token']
     else:
         printer.print_error("Could not request PIM token")
         pimToken = None
-    mainIamTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_MAIN_IAM, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_MAIN_IAM)
+    # getting AZCLI tokens for mainiam resource 
+    mainIamTokens = auth.authenticate_with_msal(client_id=const.AZURECLI_CLIENT_ID, scopes=const.SCOPE_MAIN_IAM, flow=const.REFRESH_TOKEN_FLOW, refresh_token=msGraphRefreshToken) if globalargs.nested_app_auth == None else auth.do_broker_authentication(refresh_token=globalargs.nested_app_auth, scope=const.SCOPE_MAIN_IAM, tenant_id=globalargs.tenant_id)
     if mainIamTokens != None:
         mainIamAccessToken = mainIamTokens['access_token']
     else:
         printer.print_error("Could not request Main IAM token")
-        msGraphRefreshToken = None
+        mainIamAccessToken = None
+
+    # Print UPN from token and gather more information
     printer.print_info(f"Running as {myUpn}")
     printer.print_info(f"Gathering information............")
 
@@ -351,36 +406,46 @@ def main():
         partnerAccess = None
         crossTenantAccessDefaults = None
         authMethods = None
+        capEnforcement = None
+
         if globalargs.policies:
-            deviceRegistrationPolicy = api.get_msgraph("/policies/deviceRegistrationPolicy", {}, policyAccessToken, "beta")
+            deviceRegistrationPolicy = api.get_msgraph("/policies/deviceRegistrationPolicy", {}, mwpAccessToken, "beta")
             if deviceRegistrationPolicy == None:
                 printer.print_error(f"Could not fetch Device Registration Policy")
             bar()
-            authMethods = api.get_msgraph("/policies/authenticationmethodspolicy", {}, policyAccessToken, "beta")
+            authMethods = api.get_msgraph("/policies/authenticationmethodspolicy", {}, mwpAccessToken, "beta")
             if authMethods == None:
                 printer.print_error(f"Could not fetch Authentication Methods")
             bar()
-            partnerAccess = api.get_msgraph("/policies/crossTenantAccessPolicy/partners", {"$expand": "identitySynchronization"}, policyAccessToken, "beta") 
+            partnerAccess = api.get_msgraph("/policies/crossTenantAccessPolicy/partners", {"$expand": "identitySynchronization"}, mwpAccessToken, "beta") 
             if partnerAccess == None:
                 printer.print_error(f"Could not fetch cross-tenant partner access configurations")
             bar()
-            crossTenantAccessDefaults = api.get_msgraph("/policies/crossTenantAccessPolicy/default", {}, policyAccessToken, "beta")
+            crossTenantAccessDefaults = api.get_msgraph("/policies/crossTenantAccessPolicy/default", {}, mwpAccessToken, "beta")
             if crossTenantAccessDefaults == None:
                 printer.print_error(f"Could not fetch cross-tenant access defaults")
+            bar()
+            # cap enforcement
+            capEnforcement = api.get_msgraph("/identity/conditionalAccess/settings", {}, mwpAccessToken, "beta")
+            if capEnforcement == None:
+                printer.print_error(f"Could not fetch cap enforcement settings")
             bar()
         
         # idp and federation
         federationConfig = None
         identityProviders = None
         if globalargs.identity_provider:
-            federationConfig = api.get_msgraph_value("/directory/federationConfigurations/graph.samlOrWsFedExternalDomainFederation", {}, idpAccessToken)
-            identityProviders = api.get_msgraph_value("/identity/identityProviders",{},idpAccessToken)
+            federationConfig = api.get_msgraph_value("/directory/federationConfigurations/graph.samlOrWsFedExternalDomainFederation", {}, aadpsAccessToken)
+            identityProviders = api.get_msgraph_value("/identity/identityProviders",{},aadpsAccessToken)
             if federationConfig == None:
                 printer.print_error(f"Could not fetch Federation Config")
             bar()
             if identityProviders == None:
                 printer.print_error(f"Could not fetch Identity Providers")
             bar()
+
+        
+
 
         if globalargs.output_json:
             printer.print_info("Preparing raw JSON for output...")
@@ -412,6 +477,7 @@ def main():
             output.add_json_raw_output("identityProviders", identityProviders)
             output.add_json_raw_output("partnerAccess", partnerAccess)
             output.add_json_raw_output("crossTenantAccessDefaults", crossTenantAccessDefaults)
+            output.add_json_raw_output("capEnforcement", capEnforcement)
     # https://graph.microsoft.com/v1.0/directory/federationConfigurations/graph.samlOrWsFedExternalDomainFederation
     # https://graph.microsoft.com/v1.0/directory/federationConfigurations - 74658136-14ec-4630-ad9b-26e160ff0fc6
     #https://graph.microsoft.com/beta/identity/identityProvider  - IdentityProvider.ReadWrite.all - 1b730954-1685-4b74-9bfd-dac224a7b894
@@ -420,7 +486,7 @@ def main():
 
 
     # Basic Tenant Info
-    enum_basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistrationDetails, appRegs, subscriptionsRaw, subscriptionsPolicy, msGraphToken, policyAccessToken)
+    enum_basic_info(org, groups, servicePrincipals, groupSettings, users, userRegistrationDetails, appRegs, subscriptionsRaw, subscriptionsPolicy, msGraphToken, mwpAccessToken)
     
     # General user settings
     enum_user_settings(authorizationPolicy, groupSettings)
@@ -436,7 +502,7 @@ def main():
     
     # Authentication Methods
     if globalargs.policies:
-        domain = helper.decode_jwt(policyAccessToken)["upn"].split("@")[1]
+        domain = helper.decode_jwt(mwpAccessToken)["tid"]
         enum_authentication_methods(authMethods, domain)
         # Cross Tenant Acccess Settings
         enum_cross_tenant_access(partnerAccess, crossTenantAccessDefaults, msGraphToken)
@@ -460,7 +526,7 @@ def main():
     enum_named_locations(namedLocations)
 
     # Conditional Access
-    enum_conditional_access(conditionalAccessPolicies)
+    enum_conditional_access(conditionalAccessPolicies, capEnforcement)
 
     # Administrative Units
     enum_administrative_units(admUnits, directoryRoles, pimAssignments, users, msGraphToken)
@@ -474,9 +540,10 @@ def main():
         # check if there seem to be role assignments outside of PIM even though PIM is in use...
         #count directory role members
         directory_roles_members = []
-        for directory_role in directoryRoles:
-            if len(directory_role.get("members")) > 0:
-                directory_roles_members.extend(directory_role.get("members"))
+        if directoryRoles != None:
+            for directory_role in directoryRoles:
+                if len(directory_role.get("members")) > 0:
+                    directory_roles_members.extend(directory_role.get("members"))
     
         # count pim assignments which are not scoped
         active_assignments_directory_scoped = []
@@ -485,7 +552,9 @@ def main():
                 active_assignments_directory_scoped.append(assignment)
 
         assignments_outside_pim = len(active_assignments_directory_scoped) - len(directory_roles_members)
-        enum_pim_assignments(users, pimAssignments, msGraphToken, assignments_outside_pim=assignments_outside_pim)
+        if globalargs.aadps_access_token != None:
+            group_pim = True
+        enum_pim_assignments(users, pimAssignments, msGraphToken, groupPim=group_pim ,assignments_outside_pim=assignments_outside_pim)
 
     # API-Permissions
     if servicePrincipals != None:

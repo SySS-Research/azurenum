@@ -33,14 +33,15 @@ def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
                     appRole = next((appRole for appRole in resourceServicePrincipalAppRoles if appRole["id"] == appRoleId), None)
                     if appRole != None:
                         apiPermissionName = appRole["value"]
-                        printer.print_simple(f"- {const.GREEN}[{displayName}]{const.NC} has {const.ORANGE}[{apiPermissionName}]{const.NC} in {const.CYAN}[{resourceDisplayName}]{const.NC}")
+                        color = const.RED if apiPermissionName == "RoleManagement.ReadWrite.Directory" or apiPermissionName == "AppRoleAssignment.ReadWrite.All" else const.ORANGE
+                        printer.print_simple(f"- {const.GREEN}[{displayName}]{const.NC} has {color}[{apiPermissionName}]{const.NC} in {const.CYAN}[{resourceDisplayName}]{const.NC}")
                         jsonAppRoleAssignments.append(f"{apiPermissionName} [{resourceDisplayName}]")
                     else:
                         # could not enumerate permission name, write down ID
                         printer.print_simple(f"- {const.GREEN}[{displayName}]{const.NC} has {const.ORANGE}[{appRoleId}]{const.NC} in {const.CYAN}[{resourceDisplayName}]{const.NC}")
             sp["@odata.type"] = "#microsoft.graph.servicePrincipal"
             helper.enum_nested_lists(helper.gather_nesting([sp], msGraphToken=msGraphToken), indent = "  ", jsonKey=const.PRIVILEGED_APPLICATION_OWNERS)
-            print()
+            printer.print_simple("")
             jsonData["AzurEnum-ApiPermissions"] = jsonAppRoleAssignments
             output.add_json_output(const.PRIVILEGED_APPLICATIONS,jsonData)
     if len(externalSps) > 0:
@@ -70,6 +71,6 @@ def enum_app_api_permissions(servicePrincipals, tenantId, msGraphToken):
                         printer.print_simple(f"- {const.GREEN}[{displayName}]{const.NC} has {const.ORANGE}[{appRoleId}]{const.NC} in {const.CYAN}[{resourceDisplayName}]{const.NC}")
             sp["@odata.type"] = "#microsoft.graph.servicePrincipal"
             helper.enum_nested_lists(helper.gather_nesting([sp], msGraphToken=msGraphToken), indent="  ", jsonKey=const.PRIVILEGED_APPLICATION_OWNERS)
-            print()
+            printer.print_simple("")
             jsonData["AzurEnum-ApiPermissions"] = jsonAppRoleAssignments
             output.add_json_output(const.PRIVILEGED_APPLICATIONS,jsonData)

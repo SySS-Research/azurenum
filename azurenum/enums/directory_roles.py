@@ -26,7 +26,7 @@ def enum_directory_roles(directoryRoles, msGraphToken):
                     output.add_json_output(f"{const.DIRECTORY_ROLES}-{const.SYNCED}", enrichedPrincipal)
                     synced = f"{const.ORANGE}(synced!){const.NC}"
                 printer.print_simple(f"- [GROUP] {principalId} ({displayName}) {synced}")
-                enrichedList = helper.gather_nesting([principal], msGraphToken=msGraphToken)
+                enrichedList = helper.gather_nesting([principal], msGraphToken=msGraphToken, groupPim=False)
             elif principal["@odata.type"] == "#microsoft.graph.user":
                 userPrincipalName = principal["userPrincipalName"]
                 userHasMfa = helper.hasUserMFA(userPrincipalName)
@@ -45,10 +45,10 @@ def enum_directory_roles(directoryRoles, msGraphToken):
             elif principal["@odata.type"] == "#microsoft.graph.servicePrincipal":
                 printer.print_simple(f"- [SERVICE_PRINCIPAL] {principalId} ({displayName})")
                 output.add_json_output(const.PRIVILEGED_APPLICATIONS,enrichedPrincipal)
-                enrichedList = helper.gather_nesting([principal], msGraphToken=msGraphToken)
+                enrichedList = helper.gather_nesting([principal], msGraphToken=msGraphToken, groupPim=False)
             else:
                 principalType = principal["@odata.type"]
                 printer.print_error(f"Unknown principal type: {principalType}")
             if principal["@odata.type"] == "#microsoft.graph.group" or  principal["@odata.type"] == "#microsoft.graph.servicePrincipal":
-                helper.enum_nested_lists(enrichedList, jsonKey=const.DIRECTORY_ROLES)
+                helper.enum_nested_lists(enrichedList, jsonKey=const.DIRECTORY_ROLES, permission=roleName)
     return directoryRoles
