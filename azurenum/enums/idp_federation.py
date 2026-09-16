@@ -12,7 +12,7 @@ def enum_idps(identityProviders, federation_config):
             issuerUri = config["issuerUri"]
             preferredAuthenticationProtocol = config["preferredAuthenticationProtocol"]
             printer.print_warning(f" - [{preferredAuthenticationProtocol}] \"{displayName}\" ({issuerUri})")
-        print()
+        printer.print_simple("")
     else:
         printer.print_info("No Federation-Services configured")
     # lists further idps and gives warning if it is not microsoft built-in idp

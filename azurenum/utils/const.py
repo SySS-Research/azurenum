@@ -1,4 +1,4 @@
-VERSION="v1.1.5"
+VERSION="v1.1.7"
 
 # Misc Constant GUIDs
 AAD_PREMIUM_P2 = "eec0eb4f-6444-4f95-aba0-50c24d67f998"
@@ -30,7 +30,7 @@ ELMADMIN_CLIENT_ID = '0032593d-6a05-4847-8ca4-4b6220ed2a1e'
 # Non-FOCI Clients:
 # If user authentication policies are supposed to be queried we need another client id for scope: Policy.ReadWrite.All
 MODERN_WORKPLACE_CUSTOMER_API_NATIVE_CLIENT_ID = "2e307cd5-5d2d-4499-b656-a97de9f52708" #-> not possible to get IdentitiyProviders with this
-AAD_POWERSHELL_CLIENT_ID = "1b730954-1685-4b74-9bfd-dac224a7b894" # IdentityProvider.ReadWrite -> not possible to get Policies with this
+AAD_POWERSHELL_CLIENT_ID = "1b730954-1685-4b74-9bfd-dac224a7b894" # IdentityProvider.ReadWrite -> not possible to get Policies with this. However we can get group pim with this...
 # keep second login and implement BroCI meanwhile instead...
 
 # Could use an enum class for this? maybe refactor in the future
@@ -59,6 +59,9 @@ PRIVILEGED_APPLICATIONS = "privilegedApplications"
 PRIVILEGED_APPLICATION_OWNERS = "privilegedApplicationOwners"
 NO_MFA = "noMfa"
 SYNCED = "synced"
+DYNAMIC = "dynamic"
+PUBLIC = "public"
+NO_PRIVILEGED_MANAGEMENT = "noPrivMgmt"
 LEGACY_FINDINGS = "legacy-findings"
 
 

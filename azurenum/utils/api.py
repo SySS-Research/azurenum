@@ -85,7 +85,6 @@ def get_msgraph_value(endpoint, params, token, version="v1.0"):
         else:
             url = rawResult["@odata.nextLink"]
             params = {} # nextLink includes the search params
-    
     return results
 
 # post data to msgraph. currently only used to resolve ids (helper:resolve_directoryObjects_byIds)

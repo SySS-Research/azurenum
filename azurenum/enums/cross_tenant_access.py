@@ -11,7 +11,7 @@ def enum_cross_tenant_access(settings, defaultsettings, msGraphToken):
         return
     
     # Default settings
-    deftrust= defaultsettings["inboundTrust"]
+    deftrust= defaultsettings.get("inboundTrust")
     if deftrust["isMfaAccepted"]:
         printer.print_warning("MFA is trusted from external domains")
     else: 
@@ -45,7 +45,7 @@ def enum_cross_tenant_access(settings, defaultsettings, msGraphToken):
     #     for app in tenant_restrictions["applications"]["targets"]:
     #          printer.print_warning(f"  - [{app["targetType"]}] {const.RED}{app["target"]}{const.NC}")
 
-    print()
+    printer.print_simple("")
 
     # Partner Specific Configs
     printer.print_info("Partner Specific Configurations")
@@ -112,14 +112,20 @@ def enum_cross_tenant_access(settings, defaultsettings, msGraphToken):
         #     printer.print_info(f"    Partner tenant restrictions are set to {const.YELLOW}default{const.NC}")
 
         # Cross-Tenant Sync - identitySynchronization key only exists if access was once allowed. - only print if sync is allowed for either groups or users
+        # print(partner.get("identitySynchronization"))
         if partner.get("identitySynchronization") != None:
             identity_sync = partner.get("identitySynchronization")
             # printer.print_warning("Cross-Tenant Synchronization Settings are set!")
-            if identity_sync["groupSyncInbound"]["isSyncAllowed"] == True and identity_sync["userSyncInbound"]["isSyncAllowed"] == True:
-                printer.print_warning("    User and group synchronisation from this partner into your tenant is allowed!")
-            elif identity_sync["groupSyncInbound"]["isSyncAllowed"] == True:
-                printer.print_warning("    Group synchronization from this partner into your tenant is allowed!")
-            elif identity_sync["userSyncInbound"]["isSyncAllowed"] == True:
-                printer.print_warning("    User synchronization from this partner into your tenant is allowed!")
+            groupSyncInbound = identity_sync.get("groupSyncInbound")
+            userSyncInbound = identity_sync.get("userSyncInbound")
+            if groupSyncInbound != None and userSyncInbound != None:
+                if groupSyncInbound.get("isSyncAllowed") == True and userSyncInbound.get("isSyncAllowed") == True:
+                    printer.print_warning("    User and group synchronisation from this partner into your tenant is allowed!")
+            elif groupSyncInbound != None:
+                if groupSyncInbound.get("isSyncAllowed") == True:
+                    printer.print_warning("    Group synchronization from this partner into your tenant is allowed!")
+            elif userSyncInbound != None:
+                if userSyncInbound.get("isSyncAllowed") == True:
+                    printer.print_warning("    User synchronization from this partner into your tenant is allowed!")
 
 

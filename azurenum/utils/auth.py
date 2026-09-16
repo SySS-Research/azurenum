@@ -172,7 +172,7 @@ def auto_login(driver, username=None, password=None):
         pass  # Sometimes this prompt doesn't appear
 
 # NAA Auth
-def do_broker_authentication(refresh_token, client_id=const.ADIBIZAUX_CLIENT_ID, scope=const.SCOPE_MS_GRAPH, brk_client_id=const.AZURE_PORTAL_CLIENT_ID, redirect_uri=const.AZURE_PORTAL_BROKER_URI, origin=const.AZURE_PORTAL):
+def do_broker_authentication(refresh_token, client_id=const.ADIBIZAUX_CLIENT_ID, scope=const.SCOPE_MS_GRAPH, brk_client_id=const.AZURE_PORTAL_CLIENT_ID, redirect_uri=const.AZURE_PORTAL_BROKER_URI, origin=const.AZURE_PORTAL, tenant_id=None):
     # 74658136-14ec-4630-ad9b-26e160ff0fc6 is ADIbiziaUX
     # c44b4083-3bb0-49c1-b47d-974e53cbdf3c is Azure Portal
     body = {
@@ -189,7 +189,9 @@ def do_broker_authentication(refresh_token, client_id=const.ADIBIZAUX_CLIENT_ID,
     'Origin': origin,
     }
 
-    response = sessions.auth_session.post('https://login.microsoftonline.com/common/oauth2/v2.0/token', data=body, headers=headers)
+    # Fix: Personal Microsoft Account tokens don't work against /common
+    tenant_id = 'common' if not tenant_id else tenant_id
+    response = sessions.auth_session.post(f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token', data=body, headers=headers)
     if response.status_code != 200:
         print(f"Could not retrieve tokens via NAA auth. Dumping response: \n{response.content}")
         return None
